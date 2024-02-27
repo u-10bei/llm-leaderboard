@@ -13,11 +13,6 @@ from logging import DEBUG, StreamHandler, getLogger
 from datasets import load_dataset
 from huggingface_hub import login
 
-access_token = "access_token"
-
-# 読み込み用Tokenでhuggingface-cli login
-login(access_token)
-
 logger = getLogger(__name__)
 handler = StreamHandler()
 handler.setLevel(DEBUG)
@@ -128,8 +123,9 @@ class BaseDatasetProcessor:
 class JarcDatasetProcessor(BaseDatasetProcessor):
     data_name = "jarc"
 
-    def __init__(self, dataset_dir: Path, version_name: str) -> None:
+    def __init__(self, dataset_dir: Path, version_name: str, access_token: str) -> None:
         super().__init__(dataset_dir, version_name)
+        login(access_token) # 読み込み用Tokenでhuggingface-cli login
         self.output_info.instruction = (
             "質問と回答の選択肢を入力として受け取り、選択肢から回答を選択してください。なお、回答は選択肢の番号（例：0）でするものとします。 回答となる数値をint型で返し、他には何も含めないことを厳守してください。"
         )
@@ -137,26 +133,30 @@ class JarcDatasetProcessor(BaseDatasetProcessor):
         self.output_info.metrics = ["exact_match"]
 
     def preprocess_evaluation_data(self):
-        answerKey_dict = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4}
+        datasets_path = "ARCsample/ja_ARC" # hugging_face上のdatasetのpath
+        config_names = ["ja_ARC-Challenge", "ja_ARC-Easy"]
+        answerKey_dict = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "1": 0, "2": 1, "3": 2, "4": 3, "5": 4}
 
-        test_samples: list[Sample] = []
-        f_test = load_dataset("ARCsample/ARC_100", 'ja_ARC-Challenge', split="test")
-        test_samples: list[Sample] = []
-        for sample_dict in f_test:
-            input_str = f"質問：{sample_dict['question']}\n選択肢："
-            for i, t in enumerate(sample_dict["choices"]["text"]):
-                input_str += f"{i}.{t}"
-            test_samples.append(
-                Sample(
-                    input=input_str,
-                    output=str(answerKey_dict[sample_dict["answerKey"]]),
+        for config_name in config_names:
+            test_samples: list[Sample] = []
+            f_test = load_dataset(f"{datasets_path}", f'{config_name}', split="test")
+            test_samples: list[Sample] = []
+            for sample_dict in f_test:
+                input_str = f"質問：{sample_dict['question']}\n選択肢："
+                for i, t in enumerate(sample_dict["choices"]["text"]):
+                    input_str += f"{i}.{t}"
+                test_samples.append(
+                    Sample(
+                        input=input_str,
+                        output=str(answerKey_dict[sample_dict["answerKey"]]),
+                    )
                 )
-            )
 
-        self._save_evaluation_data(test_samples, self.evaluation_dir / "test" / f"{self.data_name}.json")
+            self._save_evaluation_data(test_samples, self.evaluation_dir / "test" / f"{self.data_name}_{config_name}.json")
     
 if __name__ == "__main__":
     dataset_dir = Path("data")
     version_name = "v0.0.1"
-    processor = JarcDatasetProcessor(dataset_dir, version_name)
+    access_token = "access_token"
+    processor = JarcDatasetProcessor(dataset_dir, version_name, access_token)
     processor.pipeline()
