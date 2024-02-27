@@ -13,7 +13,7 @@ from logging import DEBUG, StreamHandler, getLogger
 from datasets import load_dataset
 from huggingface_hub import login
 
-access_token = "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"
+access_token = "access_token"
 
 # 読み込み用Tokenでhuggingface-cli login
 login(access_token)
